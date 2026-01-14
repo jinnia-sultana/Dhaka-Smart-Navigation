@@ -10,7 +10,7 @@
 #include <cctype>
 using namespace std;
 
-// ==================== GRAPH STRUCTURES ====================
+//GRAPH
 struct Node {
     int id;
     string name;
@@ -41,7 +41,7 @@ struct RouteOption {
     }
 };
 
-// ==================== GRAPH DATA ====================
+//DATA
 vector<Node> nodes;
 vector<Edge> edges;
 map<int, vector<int>> adjacency;
@@ -65,7 +65,7 @@ void initializeGraph() {
         edges.push_back(Edge(to, from, dist, mode)); 
     };
 
-    // ========== WALKING EDGES ==========
+    //WALK EDGES
     addBidirectional(0, 1, 5.0, "walk");
     addBidirectional(1, 2, 5.0, "walk");
     addBidirectional(2, 3, 5.0, "walk");
@@ -78,7 +78,7 @@ void initializeGraph() {
     addBidirectional(4, 7, 5.0, "walk");
     addBidirectional(3, 6, 4.0, "walk");
     
-    // ========== RICKSHAW EDGES ==========
+    //RICKSHAW EDGES
     addBidirectional(0, 1, 5.0, "rickshaw");
     addBidirectional(1, 2, 5.0, "rickshaw");
     addBidirectional(2, 3, 5.0, "rickshaw");
@@ -91,14 +91,13 @@ void initializeGraph() {
     addBidirectional(4, 6, 4.0, "rickshaw");
     addBidirectional(4, 7, 5.0, "rickshaw");
     
-    // ========== BUS EDGES ==========
+    //BUS EDGES
     addBidirectional(0, 2, 12.0, "bus");
     addBidirectional(2, 4, 12.0, "bus");
     addBidirectional(0, 6, 8.0, "bus");
     addBidirectional(6, 3, 10.0, "bus");
     addBidirectional(3, 4, 5.0, "bus");
     addBidirectional(4, 6, 6.0, "bus");
-    // Additional bus routes to ensure connectivity
     addBidirectional(1, 2, 5.0, "bus");
     addBidirectional(2, 7, 3.0, "bus");
     addBidirectional(1, 6, 4.0, "bus");
@@ -109,14 +108,14 @@ void initializeGraph() {
     }
 }
 
-// Heuristic function (Euclidean distance based on coordinates)
+//Heuristic(Distance based on coordinates)
 double heuristic(int n1, int n2) {
     double dx = nodes[n1].x - nodes[n2].x;
     double dy = nodes[n1].y - nodes[n2].y;
     return sqrt(dx*dx + dy*dy);
 }
 
-// ==================== SIMPLE A* (Finds shortest path) ====================
+//A*
 vector<int> findShortestPath(int start, int goal, string mode) {
     priority_queue<pair<double, int>, vector<pair<double, int>>, greater<pair<double, int>>> openSet;
     
@@ -163,10 +162,10 @@ vector<int> findShortestPath(int start, int goal, string mode) {
         }
     }
     
-    return {}; // No path found
+    return {}; //No path
 }
 
-// ==================== COST CALCULATIONS ====================
+//COST CALCULATION
 double calculateCost(string mode, double distance, int segments) {
     if (mode == "walk") return 0.0;
     else if (mode == "rickshaw") return distance * 30;
@@ -183,10 +182,10 @@ double calculateTime(string mode, double distance) {
     return (distance / speed) * 60;
 }
 
-// ==================== SCORE CALCULATION ====================
+//SCORE
 double calculateScore(double time, double cost, double distance, 
                      double time_weight, double expense_weight, double distance_weight) {
-    // Normalize values to 0-1 scale
+    //Normalize values to 0-1 scale
     double max_time = 240.0;
     double max_cost = 1000.0;
     double max_distance = 30.0;
@@ -195,7 +194,7 @@ double calculateScore(double time, double cost, double distance,
     double normalized_cost = cost / max_cost;
     double normalized_distance = distance / max_distance;
     
-    // Calculate weighted score (lower = better)
+    //weighted score
     double score = (time_weight * normalized_time) + 
                    (expense_weight * normalized_cost) + 
                    (distance_weight * normalized_distance);
@@ -203,7 +202,7 @@ double calculateScore(double time, double cost, double distance,
     return score;
 }
 
-// ==================== DISPLAY FUNCTIONS ====================
+//DISPLAY
 void displayMap() {
     cout << "\nDhaka City Map:\n";
     cout << "========================================\n";
@@ -243,7 +242,7 @@ void displayRouteDetails(RouteOption& route, int rank) {
     cout << "\n";
 }
 
-// ==================== LOCATION VALIDATION ====================
+//LOCATION
 bool findLocationIndex(string input, int &index) {
     string locations[] = {"Dhanmondi", "Farmgate", "Shahbag", "Motijheel", "Gulistan", 
                          "Kalabagan", "KarwanBazar", "PressClub"};
@@ -263,12 +262,11 @@ bool findLocationIndex(string input, int &index) {
     return false;
 }
 
-// ==================== ROUTE CALCULATION ====================
+//ROUTE
 vector<RouteOption> calculateRoutes(string from, string to, 
                                    int time_pref, int expense_pref, int distance_pref) {
     int start_idx = -1, goal_idx = -1;
     
-    // Validate locations
     if (!findLocationIndex(from, start_idx)) {
         cout << "\n[ERROR] Starting location '" << from << "' not found.\n";
         return {};
@@ -279,9 +277,9 @@ vector<RouteOption> calculateRoutes(string from, string to,
         return {};
     }
     
-    // Normalize weights
+    //Normalize weights
     double total_weight = time_pref + expense_pref + distance_pref;
-    if (total_weight < 0.001) total_weight = 300.0; // Avoid division by zero
+    if (total_weight < 0.001) total_weight = 300.0; //Avoid division by zero
     
     double time_weight = time_pref / total_weight;
     double expense_weight = expense_pref / total_weight;
@@ -327,7 +325,6 @@ vector<RouteOption> calculateRoutes(string from, string to,
     return routes;
 }
 
-// ==================== MAIN PROGRAM ====================
 int main() {
     initializeGraph();
     
@@ -363,7 +360,6 @@ int main() {
     cout << "Distance importance: ";
     cin >> distance_val;
     
-    // Validate individual ranges
     if (time_val < 0 || time_val > 100 || 
         expense_val < 0 || expense_val > 100 || 
         distance_val < 0 || distance_val > 100) {
@@ -374,7 +370,7 @@ int main() {
         return 1;
     }
     
-    // Calculate relative percentages
+    //relative percentages
     double total = time_val + expense_val + distance_val;
     if (total < 0.001) total = 300.0;
     
@@ -394,7 +390,7 @@ int main() {
     cin.ignore();
     cin.get();
     
-    // Calculate and display routes
+    //Calculate and display routes
     system("cls");
     vector<RouteOption> routes = calculateRoutes(from_location, to_location, 
                                                 time_val, expense_val, distance_val);
@@ -418,7 +414,7 @@ int main() {
     
     cout << "\n" << string(55, '=') << "\n";
     
-    // Display ALL routes (should be 3 if all modes have paths)
+    //Display routes
     for (int i = 0; i < routes.size(); i++) {
         displayRouteDetails(routes[i], i+1);
         if (i < routes.size() - 1) {
