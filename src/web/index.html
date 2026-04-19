@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Smart Multi-Modal Navigation</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body{margin:0;font-family:Arial}
+#map{height:100vh}
+#panel{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.2);z-index:1000;width:220px}
+.slider{width:100%;margin:5px 0 15px 0}
+button{width:100%;padding:8px;background:#0078ff;color:white;border:none;border-radius:4px;cursor:pointer;margin-top:5px}
+button:hover{background:#0056b3}
+#status{margin-top:10px;font-size:12px;color:#666}
+</style>
+</head>
+<body>
+<div id="panel">
+    <h3>Route Preferences</h3>
+    <label>Time</label>
+    <input type="range" min="0" max="100" value="50" class="slider" id="time">
+    <label>Money</label>
+    <input type="range" min="0" max="100" value="50" class="slider" id="money">
+    <label>Distance</label>
+    <input type="range" min="0" max="100" value="50" class="slider" id="distance">
+    <button onclick="findRoute()">Find Route</button>
+    <button onclick="resetMarkers()" style="background:#6c757d">Reset</button>
+    <div id="status">Click map to set start point</div>
+</div>
+<div id="map"></div>
+<script>
+var map = L.map('map').setView([23.8103, 90.4125], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+var startMarker=null, endMarker=null, routeLine=null;
+
+map.on('click', function(e){
+    if(startMarker==null){
+        startMarker=L.marker(e.latlng,{draggable:true}).addTo(map).bindPopup("Start").openPopup();
+        document.getElementById('status').innerHTML='Now click destination point';
+        startMarker.on('dragend',function(){document.getElementById('status').innerHTML='Start point updated';});
+    }
+    else if(endMarker==null){
+        endMarker=L.marker(e.latlng,{draggable:true}).addTo(map).bindPopup("Destination").openPopup();
+        document.getElementById('status').innerHTML='Ready! Click "Find Route"';
+        endMarker.on('dragend',function(){document.getElementById('status').innerHTML='Destination updated';});
+    }
+});
+
+function resetMarkers(){
+    if(startMarker) map.removeLayer(startMarker);
+    if(endMarker) map.removeLayer(endMarker);
+    if(routeLine) map.removeLayer(routeLine);
+    startMarker=null; endMarker=null; routeLine=null;
+    document.getElementById('status').innerHTML='Click map to set start point';
+}
+
+function findRoute(){
+    if(!startMarker||!endMarker){alert('Select start and destination points!');return;}
+    document.getElementById('status').innerHTML='Loading route...';
+    fetch('route.json')
+        .then(res=>res.json())
+        .then(coords=>{
+            if(routeLine) map.removeLayer(routeLine);
+            routeLine=L.polyline(coords,{color:'blue',weight:5,opacity:0.8}).addTo(map);
+            map.fitBounds(routeLine.getBounds(),{padding:[50,50]});
+            document.getElementById('status').innerHTML='Route loaded successfully';
+        })
+        .catch(error=>{
+            console.error('Error:',error);
+            document.getElementById('status').innerHTML='Error: route.json not found';
+            var dummy=[[startMarker.getLatLng().lat,startMarker.getLatLng().lng],[23.8120,90.4150],[23.8150,90.4200],[endMarker.getLatLng().lat,endMarker.getLatLng().lng]];
+            if(routeLine) map.removeLayer(routeLine);
+            routeLine=L.polyline(dummy,{color:'red',weight:3,dashArray:'5,5'}).addTo(map);
+        });
+}
+</script>
+</body>
+</html>
