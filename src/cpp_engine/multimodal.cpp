@@ -295,6 +295,69 @@ printf("%s from %s to %s: %.0f m, %.1f min, %.1f tk\n",
     printf("Total Time: %.1f min\n", totalTime);
     printf("Total Cost: %.1f tk\n", totalCost);
 }
+// Helper: Get allowed modes for a specific route type
+unsigned int getAllowedModes(const char* routeType, double directDist = 0) {
+    if (strcmp(routeType, "time") == 0) {
+        // Time-optimized: Metro + Rickshaw (fastest combo)
+        return (1<<MODE_WALK) | (1<<MODE_METRO) | (1<<MODE_RICKSHAW);
+    }
+    else if (strcmp(routeType, "cost") == 0) {
+        // Cost-optimized: Walk + Bus (cheapest combo)
+        if (directDist < 2000) {  // < 2km
+            return (1<<MODE_WALK);  // Walk only for short trips
+        }
+        return (1<<MODE_WALK) | (1<<MODE_UTTARA) | (1<<MODE_BIKOLPO);
+    }
+    // Default: all modes
+    return (1<<MODE_WALK) | (1<<MODE_BIKE) | (1<<MODE_RICKSHAW) | 
+           (1<<MODE_METRO) | (1<<MODE_UTTARA) | (1<<MODE_BIKOLPO);
+}
+
+// Modified Dijkstra with mode filtering
+vector<int> dijkstraFiltered(int start, int goal, double w_time, double w_cost, double w_dist, 
+                              unsigned int allowedModes) {
+    vector<double> cost(numNodes, INF);
+    vector<int> prev(numNodes, -1);
+    vector<bool> visited(numNodes, false);
+    
+    cost[start] = 0;
+    
+    for (int i = 0; i < numNodes; i++) {
+        int u = -1;
+        double best = INF;
+        for (int j = 0; j < numNodes; j++) {
+            if (!visited[j] && cost[j] < best) {
+                best = cost[j];
+                u = j;
+            }
+        }
+        if (u == -1 || u == goal) break;
+        visited[u] = true;
+        
+        for (int eidx : adj[u]) {
+            const Edge& e = edges[eidx];
+            
+            // Skip if mode not allowed
+            if (!(allowedModes & (1 << (int)e.mode))) continue;
+            
+            double distKm = e.distance / 1000.0;
+            double timeCost = (distKm / getSpeed(e.mode)) * 60.0;
+            double moneyCost = distKm * getCost(e.mode);
+            double edgeCost = timeCost * w_time + moneyCost * w_cost + distKm * w_dist;
+            
+            if (cost[u] + edgeCost < cost[e.to]) {
+                cost[e.to] = cost[u] + edgeCost;
+                prev[e.to] = u;
+            }
+        }
+    }
+    
+    vector<int> path;
+    if (cost[goal] == INF) return path;
+    for (int at = goal; at != -1; at = prev[at]) path.push_back(at);
+    reverse(path.begin(), path.end());
+    return path;
+}
 
 int main() {
     printf("\n============================================\n");
@@ -334,16 +397,38 @@ if (strlen(nodes[did].name) == 0) strcpy(nodes[did].name, "Destination");
 
     printf("\nStart: %s\n", nodes[sid].name);
     printf("Destination: %s\n", nodes[did].name);
+      double directDist = haversineDistance(slat, slon, dlat, dlon);
+    printf("Direct distance: %.0f m\n", directDist);
 
     printf("\nCalculating routes...\n");
 
-    vector<int> path1 = dijkstra(sid, did, w_time, w_cost, w_dist);
-    vector<int> path2 = dijkstra(sid, did, 0.8, 0.1, 0.1);
-    vector<int> path3 = dijkstra(sid, did, 0.1, 0.8, 0.1);
+   // Route 1: User preference (all modes)
+    unsigned int allModes = (1<<MODE_WALK) | (1<<MODE_BIKE) | (1<<MODE_RICKSHAW) | 
+                            (1<<MODE_METRO) | (1<<MODE_UTTARA) | (1<<MODE_BIKOLPO);
+    vector<int> path1 = dijkstraFiltered(sid, did, w_time, w_cost, w_dist, allModes);
+    
+    // Route 2: Time-optimized (Metro + Rickshaw for speed)
+    unsigned int timeModes = (1<<MODE_WALK) | (1<<MODE_METRO) | (1<<MODE_RICKSHAW);
+    vector<int> path2 = dijkstraFiltered(sid, did, 0.8, 0.1, 0.1, timeModes);
+    
+    // Route 3: Cost-optimized (Walk + Bus, or Walk only if <2km)
+    unsigned int costModes;
+    if (directDist < 2000) {
+        costModes = (1<<MODE_WALK);  // Walk only for short trips
+    } else {
+        costModes = (1<<MODE_WALK) | (1<<MODE_UTTARA) | (1<<MODE_BIKOLPO);
+    }
+    vector<int> path3 = dijkstraFiltered(sid, did, 0.1, 0.8, 0.1, costModes);
+    
+    // Fallbacks
+    if (path1.empty()) path1 = dijkstra(sid, did, w_time, w_cost, w_dist);
+    if (path2.empty()) path2 = dijkstra(sid, did, 0.8, 0.1, 0.1);
+    if (path3.empty()) path3 = dijkstra(sid, did, 0.1, 0.8, 0.1);
 
     printRouteShort(path1, "ROUTE 1 (Your Preferences)");
     printRouteShort(path2, "ROUTE 2 (Time Optimized)");
     printRouteShort(path3, "ROUTE 3 (Cost Optimized)");
+
 
     if (!path1.empty()) exportRouteToJSON(path1, "../web/route1.json");
     if (!path2.empty()) exportRouteToJSON(path2, "../web/route2.json");
@@ -353,6 +438,7 @@ if (strlen(nodes[did].name) == 0) strcpy(nodes[did].name, "Destination");
     if (!path2.empty()) exportPathToKML(path2, "../web/route2.kml");
     if (!path3.empty()) exportPathToKML(path3, "../web/route3.kml");
 
-    printf("\nKML files exported to web/\n");
+     printf("\nFiles exported to web/\n");
+    printf("Open web/index.html to view routes.\n\n");
     return 0;
 }
