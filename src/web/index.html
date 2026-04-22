@@ -1,79 +1,254 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Smart Multi-Modal Navigation</title>
+<meta charset="UTF-8">
+<title>Dhaka Navigator - Multi-Modal Routes</title>
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
-body{margin:0;font-family:Arial}
-#map{height:100vh}
-#panel{position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.2);z-index:1000;width:220px}
-.slider{width:100%;margin:5px 0 15px 0}
-button{width:100%;padding:8px;background:#0078ff;color:white;border:none;border-radius:4px;cursor:pointer;margin-top:5px}
-button:hover{background:#0056b3}
-#status{margin-top:10px;font-size:12px;color:#666}
+body { margin: 0; font-family: Arial, sans-serif; }
+#map { height: 100vh; }
+
+.controls {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: white;
+    padding: 12px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 1000;
+    min-width: 140px;
+}
+.controls h3 { margin: 0 0 10px 0; font-size: 14px; text-align: center; }
+button {
+    width: 100%;
+    margin: 6px 0;
+    padding: 8px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    background: #3b82f6;
+    color: white;
+}
+button:hover { background: #2563eb; }
+
+.stats {
+    position: absolute;
+    bottom: 20px;
+    left: 15px;
+    background: white;
+    padding: 12px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 1000;
+    min-width: 180px;
+}
+.stat-row { display: flex; gap: 12px; margin-top: 8px; }
+.stat-box { text-align: center; flex: 1; }
+.stat-box b { display: block; font-size: 18px; color: #2563eb; }
+.stat-label { font-size: 10px; color: #666; }
+
+.legend {
+    position: absolute;
+    bottom: 20px;
+    right: 15px;
+    background: white;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    font-size: 11px;
+    min-width: 110px;
+}
+.legend h4 { margin: 0 0 8px 0; font-size: 12px; text-align: center; }
+.legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+.legend-color { width: 20px; height: 4px; border-radius: 2px; margin-right: 8px; }
+
+.segment-list {
+    margin-top: 10px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 10px;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+}
+.segment-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    padding: 2px;
+}
+.segment-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 </style>
 </head>
+
 <body>
-<div id="panel">
-    <h3>Route Preferences</h3>
-    <label>Time</label>
-    <input type="range" min="0" max="100" value="50" class="slider" id="time">
-    <label>Money</label>
-    <input type="range" min="0" max="100" value="50" class="slider" id="money">
-    <label>Distance</label>
-    <input type="range" min="0" max="100" value="50" class="slider" id="distance">
-    <button onclick="findRoute()">Find Route</button>
-    <button onclick="resetMarkers()" style="background:#6c757d">Reset</button>
-    <div id="status">Click map to set start point</div>
-</div>
+
 <div id="map"></div>
+
+<div class="controls">
+    <h3>SELECT ROUTE</h3>
+    <button onclick="loadRoute(1)">Route 1 (Your Prefs)</button>
+    <button onclick="loadRoute(2)">Route 2 (Time)</button>
+    <button onclick="loadRoute(3)">Route 3 (Cost)</button>
+</div>
+
+<div class="stats" id="stats">
+    <div class="stat-row">
+        <div class="stat-box"><b id="dist">0</b><div class="stat-label">km</div></div>
+        <div class="stat-box"><b id="time">0</b><div class="stat-label">min</div></div>
+        <div class="stat-box"><b id="cost">0</b><div class="stat-label">tk</div></div>
+    </div>
+    <div id="segment-list" class="segment-list"></div>
+</div>
+
+<div class="legend">
+    <h4>TRANSPORT MODES</h4>
+    <div class="legend-item"><div class="legend-color" style="background:#22c55e"></div>Walk</div>
+    <div class="legend-item"><div class="legend-color" style="background:#f97316"></div>Rickshaw</div>
+    <div class="legend-item"><div class="legend-color" style="background:#38bdf8"></div>Bike</div>
+    <div class="legend-item"><div class="legend-color" style="background:#eab308"></div>Bus</div>
+    <div class="legend-item"><div class="legend-color" style="background:#ef4444"></div>Metro</div>
+</div>
+
 <script>
-var map = L.map('map').setView([23.8103, 90.4125], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-var startMarker=null, endMarker=null, routeLine=null;
+const map = L.map('map').setView([23.834145, 90.363833], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
 
-map.on('click', function(e){
-    if(startMarker==null){
-        startMarker=L.marker(e.latlng,{draggable:true}).addTo(map).bindPopup("Start").openPopup();
-        document.getElementById('status').innerHTML='Now click destination point';
-        startMarker.on('dragend',function(){document.getElementById('status').innerHTML='Start point updated';});
-    }
-    else if(endMarker==null){
-        endMarker=L.marker(e.latlng,{draggable:true}).addTo(map).bindPopup("Destination").openPopup();
-        document.getElementById('status').innerHTML='Ready! Click "Find Route"';
-        endMarker.on('dragend',function(){document.getElementById('status').innerHTML='Destination updated';});
-    }
-});
+let currentLayers = [];
 
-function resetMarkers(){
-    if(startMarker) map.removeLayer(startMarker);
-    if(endMarker) map.removeLayer(endMarker);
-    if(routeLine) map.removeLayer(routeLine);
-    startMarker=null; endMarker=null; routeLine=null;
-    document.getElementById('status').innerHTML='Click map to set start point';
-}
+const modeColors = {
+    'Walk': '#22c55e',
+    'Rickshaw': '#f97316',
+    'Bike': '#38bdf8',
+    'Bus': '#eab308',
+    'Metro': '#ef4444'
+};
 
-function findRoute(){
-    if(!startMarker||!endMarker){alert('Select start and destination points!');return;}
-    document.getElementById('status').innerHTML='Loading route...';
-    fetch('route.json')
-        .then(res=>res.json())
-        .then(coords=>{
-            if(routeLine) map.removeLayer(routeLine);
-            routeLine=L.polyline(coords,{color:'blue',weight:5,opacity:0.8}).addTo(map);
-            map.fitBounds(routeLine.getBounds(),{padding:[50,50]});
-            document.getElementById('status').innerHTML='Route loaded successfully';
-        })
-        .catch(error=>{
-            console.error('Error:',error);
-            document.getElementById('status').innerHTML='Error: route.json not found';
-            var dummy=[[startMarker.getLatLng().lat,startMarker.getLatLng().lng],[23.8120,90.4150],[23.8150,90.4200],[endMarker.getLatLng().lat,endMarker.getLatLng().lng]];
-            if(routeLine) map.removeLayer(routeLine);
-            routeLine=L.polyline(dummy,{color:'red',weight:3,dashArray:'5,5'}).addTo(map);
+
+
+function loadRoute(routeId) {
+    // Clear previous layers
+    currentLayers.forEach(layer => map.removeLayer(layer));
+    currentLayers = [];
+    
+    // Fetch REAL data from C++ generated JSON
+    fetch(`route${routeId}.json`)
+    .then(res => {
+        if (!res.ok) throw new Error(`route${routeId}.json not found - run C++ first`);
+        return res.json();
+    })
+    .then(data => {
+        const allCoords = [];
+        
+        // Draw each segment
+        data.segments.forEach((seg, idx) => {
+            const color = modeColors[seg.mode] || '#3b82f6';
+            
+            const line = L.polyline(seg.coords, {
+                color: color,
+                weight: 6,
+                opacity: 0.9
+            }).addTo(map);
+            
+            // Hover effect
+            line.on('mouseover', () => line.setStyle({ weight: 8 }));
+            line.on('mouseout', () => line.setStyle({ weight: 6 }));
+            
+            line.bindPopup(`
+                <b>${seg.mode}</b><br>
+                ${seg.from} → ${seg.to}<br>
+                ${seg.distance.toFixed(0)}m · ${seg.time.toFixed(1)}min · ${seg.cost.toFixed(1)}tk
+            `);
+            
+            currentLayers.push(line);
+            seg.coords.forEach(c => allCoords.push(c));
+            
+            // Transfer marker
+            if (idx < data.segments.length - 1) {
+                const next = data.segments[idx+1];
+                const transferPoint = seg.coords[seg.coords.length-1];
+                const marker = L.marker(transferPoint, {
+                    icon: L.divIcon({
+                        html: '<div style="width: 10px; height: 10px; background: #ff9800; border: 2px solid white; border-radius: 50%;"></div>',
+                        iconSize: [14, 14]
+                    })
+                }).addTo(map);
+                marker.bindPopup(`Switch from ${seg.mode} → ${next.mode}`);
+                currentLayers.push(marker);
+            }
         });
+        
+        //Use totals from JSON
+        document.getElementById('dist').innerText = data.total.dist.toFixed(2);
+        document.getElementById('time').innerText = data.total.time.toFixed(1);
+        document.getElementById('cost').innerText = data.total.cost.toFixed(1);
+        
+        //start marker
+        if (data.segments.length > 0) {
+            const startCoord = data.segments[0].coords[0];
+            const startMarker = L.marker(startCoord, {
+                icon: L.divIcon({
+                    html: '<div style="width: 14px; height: 14px; background: #22c55e; border: 2px solid white; border-radius: 50%;"></div>',
+                    iconSize: [18, 18]
+                })
+            }).addTo(map).bindPopup(' Start');
+            currentLayers.push(startMarker);
+        }
+        
+        //destination marker
+        if (data.segments.length > 0) {
+            const endCoord = data.segments[data.segments.length-1].coords[data.segments[data.segments.length-1].coords.length-1];
+            const endMarker = L.marker(endCoord, {
+                icon: L.divIcon({
+                    html: '<div style="width: 14px; height: 14px; background: #ef4444; border: 2px solid white; border-radius: 50%;"></div>',
+                    iconSize: [18, 18]
+                })
+            }).addTo(map).bindPopup(' Destination');
+            currentLayers.push(endMarker);
+        }
+        
+        // Fit map to route
+        if (allCoords.length) {
+            map.fitBounds(L.latLngBounds(allCoords), { padding: [50, 50] });
+        }
+        
+        // Update segment list
+        const segList = document.getElementById('segment-list');
+        if (segList) {
+            segList.innerHTML = '';
+            data.segments.forEach(seg => {
+                const div = document.createElement('div');
+                div.className = 'segment-item';
+                div.innerHTML = `
+                    <div class="segment-dot" style="background: ${modeColors[seg.mode]}"></div>
+                    <div><b>${seg.mode}</b>: ${seg.from} → ${seg.to}<br><small>${seg.distance.toFixed(0)}m · ${seg.time.toFixed(1)}min · ${seg.cost.toFixed(1)}tk</small></div>
+                `;
+                segList.appendChild(div);
+            });
+        }
+        
+        // Highlight active button
+        document.querySelectorAll('button').forEach((btn, i) => {
+            btn.style.opacity = (i + 1 === routeId) ? '1' : '0.6';
+            btn.style.background = (i + 1 === routeId) ? '#2563eb' : '#3b82f6';
+        });
+    })
+    .catch(err => {
+        console.error('Error loading route:', err);
+        const segList = document.getElementById('segment-list');
+        if (segList) {
+            segList.innerHTML = `<div style="color:red;">Error: Run C++ program first to generate route${routeId}.json</div>`;
+        }
+    });
 }
+// Load default route on page load
+loadRoute(1);
 </script>
 </body>
 </html>
